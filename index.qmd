@@ -1,0 +1,163 @@
+---
+title: "Virtual Production Dashboard"
+format: dashboard
+runtime: shiny
+---
+
+## Overview
+
+This dashboard allows users to explore virtual production data using interactive tables and plots.
+
+```{r}
+
+# Load necessary libraries
+
+library(DBI)
+library(RSQLite)
+library(DT)
+library(ggplot2)
+
+# Connect to the Database
+
+con <- DBI::dbConnect(
+  RSQLite::SQLite(),
+  "virtual_production.db"
+)
+
+DBI::dbListTables(con)
+
+```
+
+## Data View
+
+First part for displaying the contents of four tables in the database with no filtering or queries executed. Using DT to add pagination.
+
+```{r}
+
+datatable(
+dbGetQuery(con, "SELECT * FROM Productions"),
+options = list(pageLength = 8)
+)
+
+
+
+datatable(
+dbGetQuery(con, "SELECT * FROM Clients"),
+options = list(pageLength = 10)
+)
+
+
+datatable(
+dbGetQuery(con, "SELECT * FROM Assets"),
+options = list(pageLength = 10)
+)
+
+
+datatable(
+dbGetQuery(con, "SELECT * FROM CrewMembers"), 
+options = list(pageLength = 10)
+)
+```
+
+## Plot View
+
+Second part allows to visualize data through two different plots and interact with each plot.
+
+First plot for budget histogram per Production status.
+
+```{r}
+
+## Input fields
+
+selectInput(
+  "status_filter",
+  "Select Production Status:",
+  choices = c("All", "Completed", "Post-production", "Shooting", "In Planning")
+)
+
+sliderInput(
+  "min_budget",
+  "Minimum Budget:",
+  min = 0,
+  max = 1000000,
+  value = 0
+)
+
+## Reactive data
+
+filtered_data <- reactive({
+  query <- "
+  SELECT Budget, Status
+  FROM Productions
+  WHERE Budget >= ?
+  "
+  
+  data <- dbGetQuery(con, query, params = list(input$min_budget))
+  
+  if (input$status_filter != "All") {
+    data <- data[data$Status == input$status_filter, ]
+  }
+  
+  data
+})
+
+## Plot Output
+
+
+renderPlot({
+  ggplot(filtered_data(), aes(x = Budget)) +
+    geom_histogram(bins = 20, fill = "steelblue") +
+    labs(
+      title = "Production Budget Distribution",
+      x = "Budget",
+      y = "Count"
+    )
+})
+```
+
+Second plot for Production status.
+
+```{r}
+
+## Input fields
+
+sliderInput(
+  "min_crew",
+  "Minimum Crew Size:",
+  min = 0,
+  max = 50,
+  value = 0
+)
+
+## Reactive data for second plot
+
+crew_data <- reactive({
+  dbGetQuery(
+    con,
+    "
+    SELECT
+      p.Budget,
+      COUNT(pc.CrewID) AS CrewSize
+    FROM Productions p
+    LEFT JOIN ProductionCrew pc
+      ON p.ProductionID = pc.ProductionID
+    GROUP BY p.ProductionID, p.Budget
+    HAVING CrewSize >= ?
+    ",
+    params = list(input$min_crew)
+  )
+})
+
+## Output plot
+
+
+renderPlot({
+  ggplot(crew_data(), aes(x = CrewSize, y = Budget)) +
+    geom_point(color = "darkgreen") +
+    labs(
+      title = "Crew Size vs Budget",
+      x = "Crew Size",
+      y = "Budget"
+    )
+})
+```
