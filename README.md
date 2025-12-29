@@ -1,3 +1,5 @@
+# 2025_DAIE_ICA_2_DM
+
 Repository for ICA2 - SQL, Linear Regression & Quarto Dashboard using Shiny. Second Repo > Quarto Dashboard using Shiny
 
 Project completed by Diego Morenza
